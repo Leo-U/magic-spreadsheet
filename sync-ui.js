@@ -88,7 +88,7 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
     let files=await connection.list();if(generation!==epoch)return;
     let preferredId=null;
     // Optional, ignored local migration preference. Never publish personal file IDs.
-    if(files.length>1&&!files.some(f=>f.appProperties?.magicPrimary==='v1')&&location.origin===GOOGLE_SIGN_IN_ORIGIN){
+    if(files.length>1&&!files.some(f=>f.appProperties?.magicPrimary==='v1')&&location.origin==='http://127.0.0.1:8765'){
       const response=await (fetcher||fetch)('./study-migration.local.json',{cache:'no-store',credentials:'omit'});
       if(response.ok)preferredId=(await response.json()).fileId;
       else if(response.status!==404)throw Error('Could not read the local study migration preference.');
@@ -171,7 +171,7 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
   controls();$('sync-connect').hidden=false;$('sync-connect').disabled=true;
   note('Guest mode · saved in this browser');
   const ready=(async()=>{
-    if(!clientId||(!provider&&location.origin!==GOOGLE_SIGN_IN_ORIGIN)){$('sync-guidance').textContent='Google sync is available only in the local test. You can use guest mode here.';return;}
+    if(!clientId||(!provider&&location.origin!==GOOGLE_SIGN_IN_ORIGIN)){$('sync-guidance').textContent='Google sync is unavailable at this address. You can continue as a guest.';return;}
     try{
       sdk=provider||window.google?.accounts?.oauth2;
       if(!sdk)sdk=await new Promise((resolve,reject)=>{

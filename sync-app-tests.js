@@ -14,7 +14,7 @@
  document.getElementById('open-chart').click();check(location.hash==='#chart'&&!document.getElementById('chart-view').hidden,'Explicit guest entry failed');
  check(!document.getElementById('sync-connect').disabled,'Combined flow not ready');
  const connect=()=>document.getElementById('sync-connect').click();
- connect();const cancelled=t.oauthConfig;document.getElementById('sync-cancel').click();
+ connect();check(t.oauthConfig.scope.includes('/drive.file')&&!t.oauthConfig.scope.includes('/auth/spreadsheets')&&t.oauthConfig.include_granted_scopes===false,'Broad Google permission requested');const cancelled=t.oauthConfig;document.getElementById('sync-cancel').click();
  connect();await cancelled.callback({access_token:'LATE_TOKEN',expires_in:3600});
  check(!document.getElementById('sync-cancel').hidden&&document.getElementById('sync-file-link').hidden,'Late callback changed new connection');
  await t.oauthConfig.callback({error:'access_denied'});
@@ -37,7 +37,7 @@
  check(!document.querySelectorAll('#history tr').length,'Guest rows leaked into synced workspace');
  document.getElementById('set-name').value='Synced subject';document.getElementById('new-set').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait(1200);
  check(t.writes===1&&revisionRows(t.rows,'synthetic-owner',s=>s).heads[0].data.sets[0].name==='Synced subject','Chart creation not auto-saved');
- check(localStorage.getItem('learning-insights-v1')===original,'Chart auto-save changed guest data');
+ check(localStorage.getItem('learning-insights-v1')===original,'Chart auto-save changed guest data');check(t.lastAppendUrl.includes('valueInputOption=RAW'),'Formula injection protection missing');
  document.querySelector('[data-open-set]').click();document.getElementById('add-question').click();document.getElementById('question').value='Sample question';document.getElementById('answer').value='Sample answer';document.getElementById('editor').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait(1200);
  document.querySelector('[data-action="reveal"]').click();check(!!document.querySelector('.question .answer'),'Reveal button failed');
  document.querySelector('[data-action="reveal"]').click();check(!document.querySelector('.question .answer'),'Hide button failed');
@@ -58,7 +58,7 @@
  await wait(1200);
  const cleared=revisionRows(t.rows,'synthetic-owner',s=>s).heads[0].data.items[0];
  check(!cleared.green&&!cleared.yellow&&!cleared.red,'Cleared mark did not save to Google');
- document.getElementById('back-to-chart').click();document.querySelector('[data-chart-set]').click();document.getElementById('chart-progress').click();await wait(1200);check(revisionRows(t.rows,'synthetic-owner',s=>s).heads[0].data.snapshots.length===1,'Snapshot not auto-saved');
+ document.getElementById('back-to-chart').click();check(document.querySelector('[data-chart-set]').checked&&!document.getElementById('chart-progress').disabled,'Lone set should be ready to chart');document.querySelector('[data-chart-set]').click();document.querySelector('[data-open-set]').click();document.getElementById('back-to-chart').click();check(!document.querySelector('[data-chart-set]').checked&&document.getElementById('chart-progress').disabled,'Manual deselection lost on render');document.querySelector('[data-chart-set]').click();document.getElementById('chart-progress').click();await wait(1200);check(revisionRows(t.rows,'synthetic-owner',s=>s).heads[0].data.snapshots.length===1,'Snapshot not auto-saved');
  const current=revisionRows(t.rows,'synthetic-owner',s=>s).heads[0];const other=JSON.parse(JSON.stringify(current.data));other.sets[0].name='Second device updated title';t.rows.push(encodeRevision({id:'second-device',parents:[current.id],data:other},'synthetic-owner'));
  document.activeElement.blur();window.dispatchEvent(new Event('focus'));await wait(300);check(document.querySelector('#history').textContent.includes('Second device updated title'),'Remote update not loaded into chart');
  // Reconnect must retain this workspace and use the replacement token.

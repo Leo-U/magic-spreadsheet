@@ -12,7 +12,7 @@ window.fetch=async(url,options={})=>{
  else if(url.includes('drive/v3/files?'))result={files:JSON.parse(JSON.stringify(t.files))};
  else if(options.method==='PATCH'){const id=url.split('/files/')[1].split('?')[0];const file=t.files.find(f=>f.id===id);file.appProperties=JSON.parse(options.body).appProperties;result=file;t.marked=id;}
  else if(url.includes('study-migration.local.json'))result={fileId:'test_sheet'};
- else if(url.includes(':append')){t.writes++;t.rows.push(JSON.parse(options.body).values[0]);result={updates:{updatedRows:1}};}
+ else if(url.includes(':append')){t.lastAppendUrl=url;t.writes++;t.rows.push(JSON.parse(options.body).values[0]);result={updates:{updatedRows:1}};}
  else if(url.includes('/values/'))result={values:[['magic-sync-v1','synthetic-owner'],...t.rows]};
  else throw Error('Unexpected request '+url);
  return {ok:true,json:async()=>result};

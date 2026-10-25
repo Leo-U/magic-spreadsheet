@@ -19,7 +19,7 @@ python3 -m http.server 8765 --bind 127.0.0.1
 
 Use http://127.0.0.1:8765/ for the configured local Google testing client. If that port is already running, confirm its source directory before starting another server. Browser data belongs to the origin; do not change the port or hostname to access existing guest records.
 
-The Google client ID in google-config.js is a public browser identifier, not a secret. It is restricted to the local testing origin. No OAuth client secret or access token belongs in this repository. Production OAuth setup remains separate; prepare-pages.py deliberately refuses packaging with the local client configured.
+The Google client ID in google-config.js is a public browser identifier, not a secret. It is restricted to the local testing origin. No OAuth client secret or access token belongs in this repository. Local development keeps its loopback-only configuration. The explicitly selected production build uses the live GitHub Pages origin. Build it with `python3 prepare-pages.py --production`; only the allowlisted runtime files are packaged.
 
 ## Data behavior
 
@@ -49,3 +49,9 @@ An existing file is marked with the private app property `magicPrimary=v1` after
 The current tab retains its verified, short-lived Google access token in sessionStorage so refreshing can reopen the chart without another popup. Restoration checks expiration and verifies the Google account before reading its study file. It never creates a replacement file during restoration. Sign-out and cancelled restoration remove the saved connection; expired or rejected credentials require a user-initiated sign-in. Tokens are not stored in localStorage or committed to Git. This is tab-session continuity, not a permanent login or a background refresh-token flow. Pending study edits still use the existing local recovery flow.
 
 Validation: `gjs session-refresh-browser-test.js` uses isolated synthetic Google responses to test actual reloads, restoration without a popup or data writes, sign-out, expiry, account mismatch, and malformed session data.
+
+## Release preparation — 25 October 2026
+
+The release includes default selection for a lone question set, a public privacy page, and a production build with a versioned dependency graph. The live OAuth client uses the same Google project as local testing so existing app-created study files remain discoverable. No broader permissions are requested. The deployment branch contains the packaged runtime; development retains tests and build helpers.
+
+Pre-release checks: 58 synthetic main-app checks at each of 390/1280 widths, session refresh/expiry/sign-out checks, and separate sync engine recovery/conflict checks. The old two-step UI adapter assertions have been replaced by the current combined-flow checks, including narrow permission scopes and RAW spreadsheet writes.

@@ -11,7 +11,7 @@ const storage={load:()=>guestStorage.load(),save:data=>(accountStorage||guestSto
 import {historyRows,shortDate} from './overview.js?v=20261023-entries-9';
 import {createTransactions} from './transactions.js?v=20261023-radios-3';
 const transactions=createTransactions(storage);
-const $=s=>document.querySelector(s);let state,selected,account=false,editing=null,shown=new Set(),chartSelection=new Set(),selectedHistory=null;
+const $=s=>document.querySelector(s);let state,selected,account=false,editing=null,shown=new Set(),chartSelection=new Set(),chartDeselection=new Set(),selectedHistory=null;
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>new Date(s).toLocaleString(undefined,{timeZone:STUDY_TIME_ZONE});
 function message(text,error=false){$('#status').textContent=text;$('#status').className=error?'error':'';}
@@ -50,7 +50,7 @@ $('#chart-progress').onclick=()=>commit(s=>chartProgress(s,[...chartSelection]),
 $('#pairs-file').onchange=async e=>{try{if(e.target.files[0])$('#pairs').value=await e.target.files[0].text();}catch(err){message(err.message,true);}};
 $('#import').onsubmit=e=>{e.preventDefault();try{const pairs=parsePairs($('#pairs').value);if(commit(s=>pairs.forEach(([q,a])=>addItem(s,selected,q,a)),`${pairs.length} questions imported.`))$('#import').reset();}catch(err){message(err.message,true);}};
 $('#export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`learning-insights-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Backup download requested. Keep it somewhere safe.');};
-$('#restore').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const next=prepareStoredState(JSON.parse(await f.text()));if(!confirm(`Replace ${accountStorage?'the synced workspace in '+accountStorage.label:'guest browser data'} with ${next.sets.length} sets and ${next.items.length} questions? Export your current backup first if needed.`))return;storage.save(next);transactions.clear();state=next;selected=null;chartSelection.clear();shown.clear();resetEditor();navigate('#chart',true);message('Backup restored to the current workspace.');}catch(err){message(`Restore failed: ${err.message}`,true);}finally{e.target.value='';}};
+$('#restore').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const next=prepareStoredState(JSON.parse(await f.text()));if(!confirm(`Replace ${accountStorage?'the synced workspace in '+accountStorage.label:'guest browser data'} with ${next.sets.length} sets and ${next.items.length} questions? Export your current backup first if needed.`))return;storage.save(next);transactions.clear();state=next;selected=null;chartSelection.clear();chartDeselection.clear();shown.clear();resetEditor();navigate('#chart',true);message('Backup restored to the current workspace.');}catch(err){message(`Restore failed: ${err.message}`,true);}finally{e.target.value='';}};
 
 $('#undo').onclick=()=>{try{state=transactions.undo(state);render();message('Last mark undone.');}catch(e){message(`Could not undo: ${e.message}`,true);}};
 
@@ -58,7 +58,10 @@ function renderOverview(){
   const rows=historyRows(state);
   const entryColumns=Math.max(1,...rows.map(row=>row.entries.length));
   $('#undo-set').hidden=!state.setDeletions?.length;
-  chartSelection=new Set([...chartSelection].filter(id=>activeSets(state).some(s=>s.id===id)));
+  const sets=activeSets(state);
+  chartSelection=new Set([...chartSelection].filter(id=>sets.some(s=>s.id===id)));
+  // A lone set is ready to chart unless the user explicitly unchecked it.
+  if(sets.length===1&&!chartDeselection.has(sets[0].id))chartSelection.add(sets[0].id);
   $('#chart-progress').disabled=!chartSelection.size;
   $('#history-empty').hidden=rows.length>0;
   $('#history-grid').hidden=!rows.length;
@@ -91,7 +94,7 @@ $('#history').onclick=e=>{
   if(button&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey){e.preventDefault();navigate(button.getAttribute('href'));}
 };
 
-$('#history').onchange=e=>{const id=e.target.dataset.chartSet;if(id){e.target.checked?chartSelection.add(id):chartSelection.delete(id);$('#chart-progress').disabled=!chartSelection.size;}};
+$('#history').onchange=e=>{const id=e.target.dataset.chartSet;if(id){if(e.target.checked){chartSelection.add(id);chartDeselection.delete(id);}else{chartSelection.delete(id);chartDeselection.add(id);}$('#chart-progress').disabled=!chartSelection.size;}};
 
 $('#delete-entry').onclick=()=>{if(!selectedHistory)return;if(commit(s=>deleteHistoryEntry(s,selectedHistory),'Progress entry hidden; the question set is kept. Undo restores the entry.'))$('#undo-entry').focus({preventScroll:true});};
 $('#undo-entry').onclick=()=>{if(commit(s=>undoHistoryDeletion(s),'Deleted entry restored.'))$('#overview-scroll').focus({preventScroll:true});};
@@ -143,7 +146,7 @@ const sync=mountSync({guest:guestStorage,validate,empty,
     if(keepPage)applyRoute(false);else if(account)navigate('#chart',true);
   },
   onSignOut(){navigate('#home',true);},
-  onMode(adapter){guestChosen=false;accountStorage=adapter;$('#open-chart').textContent=adapter?'Open synced chart':'Open chart · use as guest';transactions.clear();},
+  onMode(adapter){chartDeselection.clear();guestChosen=false;accountStorage=adapter;$('#open-chart').textContent=adapter?'Open synced chart':'Open chart · use as guest';transactions.clear();},
   onData(data){state=prepareStoredState(data);selected=null;shown.clear();chartSelection.clear();selectedHistory=null;resetEditor();applyRoute(false);},
   canApply:()=>!document.activeElement?.matches('input,textarea,select')&&!$('#editor-panel').open
 });
