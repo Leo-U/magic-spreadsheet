@@ -190,3 +190,20 @@
 [data-theme] .detail-view .marks input:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4L19 6' fill='none' stroke='%23202020' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 
 .google-connection{margin:24px 0;border-top:1px solid #777;padding-top:16px}.google-connection h2{font-size:20px}.google-connection p{margin:10px 0}.google-actions{display:flex;gap:8px;flex-wrap:wrap}.google-connection button{font-size:14px}.google-connection details{font-size:13px}.google-connection #google-copy-review{border:1px solid #777;padding:12px;margin:12px 0}.google-connection a{overflow-wrap:anywhere}
+
+.google-signin{margin:24px 0;padding-top:16px;border-top:1px solid #777}.google-signin h2{font-size:20px}.google-signin p{margin:10px 0}.google-signin details{font-size:13px}#google-signin-button{max-width:100%;width:280px}
+
+.google-account,.sync-status{max-width:1080px;margin:12px auto;padding:0 20px}.google-account .google-signin{border:0;padding:0;margin:12px 0}.google-account button,.google-account select{margin:5px 4px 5px 0}.sync-status{font-size:13px;color:var(--muted);min-height:20px}.google-account p{overflow-wrap:anywhere}
+
+/* Account controls: one next step, workspace tools on demand. */
+.google-account .google-signin{max-width:660px;padding:12px 0}
+.google-account h2{font-size:17px;margin:0 0 10px}
+.google-account #sync-manage{margin:16px 0;padding:12px;border:1px solid var(--muted);border-radius:6px}
+.google-account #sync-options label{display:block;margin-top:12px}
+.google-account #sync-files{display:block;width:100%;max-width:100%;min-width:0}
+.google-account .google-actions{align-items:center;gap:8px}
+.google-account .google-actions button{margin:4px 0}
+.google-account .sync-extra{margin:14px 0}
+.google-account .account-exit{margin-top:18px;border-top:1px solid var(--muted);padding-top:10px}
+.google-account #sync-active{font-weight:600;overflow-wrap:anywhere}
+.google-account #sync-guidance{line-height:1.5}

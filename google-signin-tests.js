@@ -1,0 +1,34 @@
+(async()=>{
+ const {verifyIdentity,mountGoogleSignIn}=await import('./google-signin.js?v=20261023-signin-1');
+ let checks=0;const check=(ok,msg)=>{if(!ok)throw Error(msg);checks++;};
+ const before=localStorage.getItem('learning-insights-v1');
+ const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
+ const jwk=await crypto.subtle.exportKey('jwk',pair.publicKey);jwk.kid='test';jwk.alg='RS256';
+ const encode=v=>btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(v)))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+ const claims={iss:'https://accounts.google.com',aud:'test-client',nonce:'nonce',iat:100,exp:200,sub:'synthetic',email:'test@example.test',email_verified:true};
+ const token=async(c=claims,h={alg:'RS256',kid:'test'})=>{const data=encode(h)+'.'+encode(c);const sig=new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,new TextEncoder().encode(data)));return data+'.'+btoa(String.fromCharCode(...sig)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');};
+ let network=0;const fetcher=async(url,options)=>{network++;check(url==='https://www.googleapis.com/oauth2/v3/certs'&&options.credentials==='omit','Unexpected data request');return {ok:true,json:async()=>({keys:[jwk]})};};
+ const options={clientId:'test-client',nonce:'nonce',fetcher,now:()=>150000};
+ const identity=await verifyIdentity(await token(),options);check(identity.email==='test@example.test'&&!('credential' in identity),'Verified identity missing/token exposed');
+ async function reject(t,o=options){let failed=false;try{await verifyIdentity(t,o);}catch(_){failed=true;}check(failed,'Invalid credential accepted');}
+ for(const change of [{aud:'other'},{iss:'evil.test'},{nonce:'other'},{exp:140},{iat:300},{email_verified:false},{sub:''}]) await reject(await token({...claims,...change}));
+ await reject('malformed');await reject(await token(claims,{alg:'none',kid:'test'}));
+ const valid=await token(); const pieces=valid.split('.');await reject(pieces[0]+'.'+encode({...claims,email:'tampered@example.test'})+'.'+pieces[2]);
+ await reject(valid,{...options,fetcher:async()=>({ok:false})});
+ await reject(valid,{...options,fetcher:async()=>({ok:true,json:async()=>({keys:[]})})});
+ let cfg,rendered=0,disabled=0,clock=150000;
+ const provider={initialize(c){cfg=c;},renderButton(el){rendered++;el.textContent='Mock Google button';},disableAutoSelect(){disabled++;}};
+ const mounted=mountGoogleSignIn({clientId:'test-client',allowedOrigin:location.origin,provider,fetcher,now:()=>clock});await mounted.ready;
+ check(cfg.client_id==='test-client'&&!('scope' in cfg)&&cfg.auto_select===false&&cfg.button_auto_select===false&&cfg.ux_mode==='popup','Basic sign-in configuration wrong');
+ check(rendered===1&&cfg.nonce.length===48,'Missing button/nonce');
+ await cfg.callback({credential:await token({...claims,nonce:cfg.nonce})});check(mounted.status()?.email==='test@example.test','UI did not sign in');
+ check(document.getElementById('google-signin-status').textContent.includes('Guest data stays separate'),'Missing no-upload status');
+ document.getElementById('google-signout').click();check(mounted.status()===null&&disabled===1&&rendered===2,'Signout did not clear identity');
+ await cfg.callback({credential:valid});check(mounted.status()===null,'Old nonce accepted');
+ await cfg.callback({credential:await token({...claims,nonce:cfg.nonce})});clock=201000;
+ await new Promise(r=>setTimeout(r,1100));check(mounted.status()===null,'Expired account retained');
+ const oldCallback=cfg.callback;mounted.destroy();await oldCallback({credential:await token({...claims,nonce:cfg.nonce})});check(mounted.status()===null,'Destroyed view restored identity');
+ let called=false;const off=mountGoogleSignIn({clientId:'test-client',allowedOrigin:'https://not-this-origin.test',provider:{initialize(){called=true;}}});await off.ready;check(!called,'Wrong origin initialized SDK');off.destroy();
+ check(localStorage.getItem('learning-insights-v1')===before,'Guest data changed');
+ document.title='PASS '+checks+' Google sign-in checks (synthetic signatures; no Google grants)';
+})().catch(e=>document.title='FAIL '+e.message);

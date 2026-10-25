@@ -1,0 +1,17 @@
+# Local data and personal records
+backups/
+qa/
+*.log
+__pycache__/
+*.pyc
+.env
+.env.*
+*.pem
+*.key
+CONTINUE_SYNC_TEST.md
+GOOGLE_SETUP_PROGRESS.md
+LINKING_RESULT.md
+HANDOFF.md
+GOOGLE_SETUP.md
+PAGES_DEPLOYMENT.md
+google-sample-test.*

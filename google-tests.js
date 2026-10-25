@@ -1,0 +1,67 @@
+import {createGoogleConnection, SCOPES} from './google-connection.js?v=20261023-google-25';
+import {mountGoogleConnection} from './google-ui.js?v=20261023-google-25';
+export async function runGoogleTests() {
+  let checks = 0;
+  const check = (v, message) => { if (!v) throw new Error(message); checks++; };
+  const rejects = async (fn, text) => { try {await fn();} catch(e) {check(e.message.includes(text), 'Wrong error: '+e.message); return;} throw new Error('Expected rejection: '+text); };
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const fixture = {version:1,sets:[{id:'s',name:'=not a formula'}],items:[{id:'q',setId:'s',question:'Q 😀',answer:'A',green:true,yellow:false,red:false,difficult:false}],reviews:[],snapshots:[],questionDeletions:[{itemId:'q',at:'2026-10-23T12:00:00Z'}]};
+  const make = () => {
+    let config, who='a', clock=100000, scope=true, mode='ok', calls=[];
+    const oauth={initTokenClient(c){config=c;return {requestAccessToken(o){check(o.prompt==='select_account','Account chooser missing');}};},hasGrantedAllScopes(r,...s){check(JSON.stringify(s)===JSON.stringify(SCOPES),'Scopes wrong');return scope;}};
+    const fetcher=async(url,options)=>{
+      calls.push({url,options});
+      if(url.includes('userinfo'))return {ok:true,json:async()=>({sub:who,email:who+'@example.test',email_verified:true})};
+      if(mode==='network')throw Error('secret must not leak');
+      if(mode==='401')return {ok:false,status:401};
+      if(mode==='403')return {ok:false,status:403};
+      return {ok:true,status:200,json:async()=>({spreadsheetId:'mock_sheet'})};
+    };
+    const service=createGoogleConnection({clientId:'public.apps.googleusercontent.com',oauth,fetcher,now:()=>clock});
+    const response=()=>config.callback({access_token:'MEMORY_ONLY_SECRET',expires_in:3600});
+    return {oauth,fetcher,service,calls,response,get config(){return config;},set who(v){who=v;},set clock(v){clock=v;},set scope(v){scope=v;},set mode(v){mode=v;}};
+  };
+  const f=make(), original=JSON.stringify(fixture), localBefore=localStorage.getItem('learning-insights-v1');
+  let pending=f.service.connect(); await f.response(); await pending;
+  check(f.config.include_granted_scopes===false&&f.config.scope.includes('/auth/drive.file')&&!f.config.scope.includes('/auth/spreadsheets'),'Broad permission requested');
+  check(f.calls.length===1&&f.calls[0].url.includes('userinfo'),'Login uploaded data');
+  check(f.service.status().account.email==='a@example.test','Identity missing');
+  check(!JSON.stringify(f.service.status()).includes('MEMORY_ONLY_SECRET'),'Token exposed in status');
+  const plan=f.service.prepareBackup(fixture); check(f.calls.length===1,'Preview uploaded data');
+  const result=await f.service.createBackup(plan);
+  check(result.url==='https://docs.google.com/spreadsheets/d/mock_sheet/edit','Unexpected copy link');
+  const body=JSON.parse(f.calls[1].options.body), rows=body.sheets[1].data[0].rowData;
+  check(rows[0].values[0].userEnteredValue.stringValue==='magic-spreadsheet-json-v1','Backup marker missing');
+  check(rows.slice(1).map(r=>r.values[0].userEnteredValue.stringValue).join('')===original,'Data/soft deletions not preserved');
+  check(f.calls[1].options.method==='POST'&&!f.calls[1].url.includes('mock_sheet'),'Not a new spreadsheet');
+  check(JSON.stringify(fixture)===original&&localStorage.getItem('learning-insights-v1')===localBefore,'Guest data mutated');
+  f.service.disconnect(); check(f.service.status().account===null,'Identity retained after disconnect');
+  await rejects(()=>f.service.createBackup(plan),'Connect to Google again');
+  f.who='b'; pending=f.service.connect();await f.response();await pending;
+  await rejects(()=>f.service.createBackup(plan),'connection changed');
+  check(f.calls.filter(c=>c.url.includes('sheets.googleapis')).length===1,'Account switch caused upload');
+  f.clock=4000000; check(f.service.status().phase==='expired'&&f.service.status().account===null,'Expiry retained credentials');
+  pending=f.service.connect();await f.response();await pending;
+  f.mode='401';await rejects(()=>f.service.createBackup(f.service.prepareBackup(fixture)),'expired');check(f.service.status().phase==='expired','401 not reconnectable');
+  pending=f.service.connect();await f.response();await pending;
+  f.mode='network';const before=f.calls.length;await rejects(()=>f.service.createBackup(f.service.prepareBackup(fixture)),'uncertain');check(f.calls.length===before+1,'Uncertain write automatically retried');
+  f.mode='403';await rejects(()=>f.service.createBackup(f.service.prepareBackup(fixture)),'HTTP 403');
+  await rejects(()=>f.service.prepareBackup({large:'x'.repeat(1000001)}),'too large');
+  const denied=make();pending=denied.service.connect();denied.scope=false;await denied.response();await rejects(()=>pending,'Required permission');check(denied.calls.length===0,'Partial grant used');
+  const cancelled=make();pending=cancelled.service.connect();cancelled.service.disconnect();await rejects(()=>pending,'cancelled');await cancelled.response();check(cancelled.service.status().account===null,'Late OAuth callback restored connection');
+  const blocked=make();pending=blocked.service.connect();blocked.config.error_callback({type:'popup_closed'});await rejects(()=>pending,'closed or blocked');
+  const empty=createGoogleConnection({clientId:'',oauth:null,fetcher:()=>{throw Error('Unexpected network');}});await rejects(()=>empty.connect(),'OAuth client ID');
+  // Replace only this isolated test document's connection markup; no production hooks/config.
+  const fixtureHost=document.createElement('div');fixtureHost.innerHTML="<section class=\"google-connection\" aria-labelledby=\"google-title\"><h2 id=\"google-title\">Connect Google Sheets</h2><p class=\"muted\">Optional connection for a one-time copy of guest data to a new backup spreadsheet. Automatic sync and opening Google backups in this app are not available yet.</p><p id=\"google-status\" role=\"status\">Google connection is not configured yet. Guest use is available.</p><div class=\"google-actions\"><button id=\"google-connect\" type=\"button\" disabled>Connect to Google</button><button id=\"google-disconnect\" class=\"secondary\" type=\"button\" hidden>Disconnect this session</button><button id=\"google-copy\" class=\"secondary\" type=\"button\" hidden>Copy guest data to Google Sheets</button></div><p id=\"google-message\" class=\"muted\" role=\"status\"></p><div id=\"google-copy-review\" hidden><p id=\"google-copy-summary\"></p><label><input id=\"google-copy-consent\" type=\"checkbox\">I want to copy this data to the account shown above.</label><div class=\"google-actions\"><button id=\"google-copy-confirm\" type=\"button\" disabled>Create new backup spreadsheet</button><button id=\"google-copy-cancel\" class=\"secondary\" type=\"button\">Cancel</button></div></div><p id=\"google-result\"></p><details><summary>Connection setup and limits</summary><p class=\"muted\">A public Google Web application OAuth client ID, authorized app origin, consent configuration and enabled Sheets API are required. No client secret belongs in this app. Connection must be reauthorized after refresh or expiry. Disconnect clears this page\u2019s connection; it does not revoke Google permissions or remove copied files.</p><p class=\"muted\">Guest data remains a separate browser copy. Connecting another account never automatically uploads, merges or replaces it.</p></details></section>";const section=fixtureHost.firstElementChild;document.body.replaceChildren(section);
+  const ui=make();const mounted=mountGoogleConnection({getStudyData:()=>JSON.parse(original),clientId:'public.apps.googleusercontent.com',oauthProvider:ui.oauth,fetcher:ui.fetcher});await mounted.ready;
+  const $=id=>document.getElementById(id);
+  $('google-connect').click();await ui.response();await tick();
+  check($('google-status').textContent.includes('a@example.test')&&!$('google-copy').hidden,'Connected UI wrong');check(ui.calls.length===1,'UI connect uploaded');
+  $('google-copy').click();check(!$('google-copy-review').hidden&&$('google-copy-summary').textContent.includes('a@example.test'),'Confirmation missing destination');check($('google-copy-confirm').disabled,'Consent bypass');
+  $('google-copy-cancel').click();check(ui.calls.length===1,'Cancel uploaded');
+  $('google-copy').click();$('google-copy-consent').click();$('google-copy-confirm').click();await tick();await tick();
+  check(ui.calls.length===2&&document.querySelector('#google-result a')?.href.includes('mock_sheet'),'Explicit copy failed');
+  $('google-disconnect').click();check($('google-copy').hidden&&$('google-result').textContent===''&&$('google-status').textContent.includes('Not connected'),'Disconnect UI retained account');
+  check(localStorage.getItem('learning-insights-v1')===localBefore,'UI changed guest storage');
+  mounted.destroy();return checks;
+}

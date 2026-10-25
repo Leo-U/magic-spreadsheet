@@ -2,7 +2,9 @@ import {activeSets} from './sets.js';
 import {empty,addSet,addItem,progress,color,chartProgress,deleteSet,undoSetDeletion,effectiveMark,selectMark,activeItems,deleteQuestion,undoQuestionDeletion,deleteHistoryEntry,undoHistoryDeletion,changeFlag,parsePairs,validate,prepareStoredState} from './model.js?v=20261023-entries-9';
 import {STUDY_TIME_ZONE} from './calendar.js';
 import {createStorage} from './storage.js?v=20261023-entries-9';
-const storage=createStorage({empty,validate,prepareStoredState});
+const guestStorage=createStorage({empty,validate,prepareStoredState});
+let accountStorage=null;
+const storage={load:()=>guestStorage.load(),save:data=>(accountStorage||guestStorage).save(data)};
 import {historyRows,shortDate} from './overview.js?v=20261023-entries-9';
 import {createTransactions} from './transactions.js?v=20261023-radios-3';
 const transactions=createTransactions(storage);
@@ -42,7 +44,7 @@ $('#chart-progress').onclick=()=>commit(s=>chartProgress(s,[...chartSelection]),
 $('#pairs-file').onchange=async e=>{try{if(e.target.files[0])$('#pairs').value=await e.target.files[0].text();}catch(err){message(err.message,true);}};
 $('#import').onsubmit=e=>{e.preventDefault();try{const pairs=parsePairs($('#pairs').value);if(commit(s=>pairs.forEach(([q,a])=>addItem(s,selected,q,a)),`${pairs.length} questions imported.`))$('#import').reset();}catch(err){message(err.message,true);}};
 $('#export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`learning-insights-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Backup download requested. Keep it somewhere safe.');};
-$('#restore').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const next=prepareStoredState(JSON.parse(await f.text()));if(!confirm(`Replace browser data with ${next.sets.length} sets and ${next.items.length} questions? Export your current backup first if needed.`))return;storage.save(next);transactions.clear();state=next;selected=null;chartSelection.clear();shown.clear();resetEditor();navigate('#chart',true);message('Backup restored.');}catch(err){message(`Restore failed: ${err.message}`,true);}finally{e.target.value='';}};
+$('#restore').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const next=prepareStoredState(JSON.parse(await f.text()));if(!confirm(`Replace ${accountStorage?'the synced workspace in '+accountStorage.label:'guest browser data'} with ${next.sets.length} sets and ${next.items.length} questions? Export your current backup first if needed.`))return;storage.save(next);transactions.clear();state=next;selected=null;chartSelection.clear();shown.clear();resetEditor();navigate('#chart',true);message('Backup restored to the current workspace.');}catch(err){message(`Restore failed: ${err.message}`,true);}finally{e.target.value='';}};
 
 $('#undo').onclick=()=>{try{state=transactions.undo(state);render();message('Last mark undone.');}catch(e){message(`Could not undo: ${e.message}`,true);}};
 
@@ -120,6 +122,10 @@ for(const id of ['back-to-chart','open-chart','home-link'])$('#'+id).onclick=e=>
 function removeSet(id){if(!id)return;if(commit(s=>deleteSet(s,id),'Question set hidden, including its chart row and page. Undo restores it.')){$('#undo-set').focus({preventScroll:true});}}
 $('#undo-set').onclick=()=>{if(commit(s=>undoSetDeletion(s),'Question set restored with its questions, marks and history.'))$('#overview-title').focus({preventScroll:true});};
 
-// Optional Google connection: never replaces the guest storage adapter.
-import {mountGoogleConnection} from './google-ui.js?v=20261023-google-25';
-mountGoogleConnection({getStudyData:()=>JSON.parse(JSON.stringify(validate(state)))});
+// Guest and Google account storage stay separate. Signing in never uploads guest data.
+import {mountSync} from './sync-ui.js?v=20261025-signin-copy-2';
+const sync=mountSync({guest:guestStorage,validate,empty,
+  onMode(adapter){accountStorage=adapter;$('#open-chart').textContent=adapter?'Open synced chart':'Open chart · use as guest';transactions.clear();},
+  onData(data){state=prepareStoredState(data);selected=null;shown.clear();chartSelection.clear();selectedHistory=null;resetEditor();applyRoute(false);},
+  canApply:()=>!document.activeElement?.matches('input,textarea,select')&&!$('#editor-panel').open
+});
