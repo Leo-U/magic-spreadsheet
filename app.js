@@ -123,7 +123,7 @@ function removeSet(id){if(!id)return;if(commit(s=>deleteSet(s,id),'Question set 
 $('#undo-set').onclick=()=>{if(commit(s=>undoSetDeletion(s),'Question set restored with its questions, marks and history.'))$('#overview-title').focus({preventScroll:true});};
 
 // Guest and Google account storage stay separate. Signing in never uploads guest data.
-import {mountSync} from './sync-ui.js?v=20261025-signin-copy-2';
+import {mountSync} from './sync-ui.js?v=20261025-single-study-1';
 const sync=mountSync({guest:guestStorage,validate,empty,
   onMode(adapter){accountStorage=adapter;$('#open-chart').textContent=adapter?'Open synced chart':'Open chart · use as guest';transactions.clear();},
   onData(data){state=prepareStoredState(data);selected=null;shown.clear();chartSelection.clear();selectedHistory=null;resetEditor();applyRoute(false);},

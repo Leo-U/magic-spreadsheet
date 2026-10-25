@@ -2,6 +2,14 @@ import {revisionRows,encodeRevision} from './sync-core.js?v=20261023-sync-1';
 export const SYNC_SCOPE='https://www.googleapis.com/auth/drive.file';
 const DRIVE='https://www.googleapis.com/drive/v3/files';
 const SHEETS='https://sheets.googleapis.com/v4/spreadsheets/';
+export function chooseStudyFile(files, preferredId=null) {
+  const primary=files.filter(f=>f.appProperties?.magicPrimary==='v1');
+  if(primary.length>1)throw Error('More than one primary study file was found. No data was changed.');
+  if(primary.length===1)return primary[0];
+  if(preferredId){const selected=files.find(f=>f.id===preferredId);if(!selected)throw Error('Your selected study file is unavailable. No replacement was created.');return selected;}
+  if(files.length>1)throw Error('Existing study files need a one-time migration before they can open automatically. No data was changed.');
+  return files[0]||null;
+}
 export function createSyncRemote({access,owner,validate,fetcher=fetch}) {
   async function request(url,options={}) {
     const token=access();if(!token){const e=Error('Reconnect Google');e.auth=true;throw e;}
@@ -35,5 +43,9 @@ export function createSyncRemote({access,owner,validate,fetcher=fetch}) {
     ]})});
     return file;
   }
-  return {list,forFile,create};
+  async function markPrimary(file){
+    await forFile(file.id).read(); // Validate the account and journal before marking an existing file.
+    return request(DRIVE+'/'+file.id+'?fields=id,name,appProperties',{method:'PATCH',body:JSON.stringify({appProperties:{...file.appProperties,magicPrimary:'v1'}})});
+  }
+  return {list,forFile,create,markPrimary};
 }

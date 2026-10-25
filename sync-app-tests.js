@@ -1,23 +1,32 @@
 (async()=>{
  const wait=ms=>new Promise(r=>setTimeout(r,ms));let count=0;const check=(v,m)=>{if(!v)throw Error(m);count++;};
  const t=window.__syncTest,{empty,addSet}=await import('./model.js?v=20261023-entries-9'),{encodeRevision,revisionRows}=await import('./sync-core.js?v=20261023-sync-1');
+ const {chooseStudyFile}=await import('./sync-remote.js?v=20261025-single-study-1');
+ check(chooseStudyFile([])===null,'New account should initialize study data');
+ const primary={id:'primary',appProperties:{magicPrimary:'v1'}};
+ check(chooseStudyFile([{id:'sample'},primary]).id==='primary','Primary selection depends on list order');
+ for(const files of [[{id:'a'},{id:'b'}],[primary,{id:'second',appProperties:{magicPrimary:'v1'}}]]){
+  let rejected=false;try{chooseStudyFile(files);}catch(e){rejected=true;}check(rejected,'Ambiguous collection silently selected');
+ }
+ let missingRejected=false;try{chooseStudyFile([{id:'other'}],'missing');}catch(e){missingRejected=true;}check(missingRejected,'Missing preferred file replaced');
  const guest=empty();addSet(guest,'Private guest fixture');localStorage.setItem('learning-insights-v1',JSON.stringify(guest));const original=JSON.stringify(guest);location.hash='#chart';await wait(100);
  check(!document.getElementById('sync-connect').disabled,'Combined flow not ready');
  const connect=()=>document.getElementById('sync-connect').click();
  connect();const cancelled=t.oauthConfig;document.getElementById('sync-cancel').click();
  connect();await cancelled.callback({access_token:'LATE_TOKEN',expires_in:3600});
- check(!document.getElementById('sync-cancel').hidden&&document.getElementById('sync-manage').hidden,'Late callback changed new connection');
+ check(!document.getElementById('sync-cancel').hidden&&document.getElementById('sync-file-link').hidden,'Late callback changed new connection');
  await t.oauthConfig.callback({error:'access_denied'});
  check(!document.getElementById('sync-connect').hidden&&t.writes===0,'Denied consent did not return to guest');
  connect();t.user={sub:'synthetic-owner',email:'test@example.test',email_verified:false};await t.oauthConfig.callback({access_token:'UNVERIFIED',expires_in:3600});delete t.user;
  check(document.getElementById('account-exit').hidden&&t.writes===0,'Unverified account accepted');
+ t.files.push({id:'sample_sheet',name:'Separate test data',appProperties:{magicSync:'v1',owner:'synthetic-owner'}});
  document.getElementById('sync-connect').click();check(document.getElementById('sync-connect').hidden&&!document.getElementById('sync-cancel').hidden,'Pending connection offers duplicate action');await t.oauthConfig.callback({access_token:'TEST_ONLY_TOKEN',expires_in:3600});
- check(!document.getElementById('sync-manage').open&&!document.getElementById('sync-manage').hidden,'Active workspace management not collapsed');
- check(document.getElementById('sync-active').textContent.includes('Synthetic account workspace'),'Current workspace missing');
+ check(!t.files[1].appProperties.magicPrimary,'Separate sample file changed');
+ check(t.marked==='test_sheet'&&!document.getElementById('sync-file-link').hidden,'Study data did not open automatically');
+ check(!document.getElementById('sync-files')&&!document.getElementById('sync-new'),'Workspace choices remain');
  check(document.getElementById('sync-guidance').textContent.includes('Changes save automatically'),'Connected guidance stale');
- document.getElementById('google-account').open=true;document.getElementById('sync-manage').open=true;
+ document.getElementById('google-account').open=true;
  check(document.documentElement.scrollWidth<=innerWidth,'Account controls overflow viewport');
- document.getElementById('sync-manage').open=false;
  check(!document.querySelectorAll('#history tr').length,'Guest rows leaked into synced workspace');
  document.getElementById('set-name').value='Synced subject';document.getElementById('new-set').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait(1200);
  check(t.writes===1&&revisionRows(t.rows,'synthetic-owner',s=>s).heads[0].data.sets[0].name==='Synced subject','Chart creation not auto-saved');
@@ -37,7 +46,14 @@
  connect();await t.oauthConfig.callback({access_token:'RENEWED_TOKEN',expires_in:3600});
  check(t.lastAuthorization==='Bearer RENEWED_TOKEN','Existing engine did not use renewed token');
  document.getElementById('google-signout').click();check(document.querySelector('#history').textContent.includes('Private guest fixture'),'Sign-out did not restore guest chart');check(localStorage.getItem('learning-insights-v1')===original,'Guest changed after full sync session');
- check(document.getElementById('sync-manage').hidden&&document.getElementById('sync-active').hidden&&!document.getElementById('sync-connect').hidden,'Signed-out controls still show sync workspace');
+ check(document.getElementById('sync-file-link').hidden&&!document.getElementById('sync-connect').hidden,'Signed-out controls still show sync workspace');
  check(!Object.values(localStorage).some(v=>v.includes('TEST_ONLY_TOKEN')),'Token leaked to storage');
+ t.files=[];t.rows=[];
+ connect();await t.oauthConfig.callback({access_token:'NEW_ACCOUNT_TOKEN',expires_in:3600});
+ check(t.creates===1&&t.marked==='new_study','First use did not create one primary study file');
+ document.getElementById('google-signout').click();
+ connect();await t.oauthConfig.callback({access_token:'RETURNING_TOKEN',expires_in:3600});
+ check(t.creates===1&&document.getElementById('sync-file-link').href.includes('new_study'),'Returning account created a second study file');
+ document.getElementById('google-signout').click();
  document.title='PASS '+count+' main-app auto-save, Undo, snapshots, remote refresh and guest isolation checks';
 })().catch(e=>document.title='FAIL '+e.message);

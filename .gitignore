@@ -15,3 +15,6 @@ HANDOFF.md
 GOOGLE_SETUP.md
 PAGES_DEPLOYMENT.md
 google-sample-test.*
+
+# One-time local migration preference; contains a personal spreadsheet ID
+study-migration.local.json

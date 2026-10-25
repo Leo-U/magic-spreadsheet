@@ -1,5 +1,5 @@
 import {GOOGLE_SIGN_IN_CLIENT_ID,GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261023-signin-1';
-import {createSyncRemote,SYNC_SCOPE} from './sync-remote.js?v=20261023-sync-1';
+import {createSyncRemote,SYNC_SCOPE,chooseStudyFile} from './sync-remote.js?v=20261025-single-study-1';
 import {createSyncEngine,clone} from './sync-core.js?v=20261023-sync-1';
 export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,fetcher,clientId=GOOGLE_SIGN_IN_CLIENT_ID}) {
   const $=id=>document.getElementById(id);
@@ -11,16 +11,11 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
     $('account-exit').hidden=!identity;
     $('google-signin-status').textContent=identity?'Signed in as '+identity.email:'';
     $('google-signout').hidden=!identity;
-    $('sync-guidance').textContent=!identity?'Your study data saves automatically to Google Sheets':!file?'Choose your existing study workspace below.':'Changes save automatically. Offline edits stay on this device until you reconnect.';
-    $('sync-manage').hidden=!remote;
-    $('sync-manage-title').textContent=file?'Manage study workspaces':'Choose study data';
-    $('sync-manage').open=!!remote&&!file;
-    $('sync-active').hidden=!file;
-    $('sync-active').textContent=file?'Current workspace: '+file.name:'';
+    $('sync-guidance').textContent=!identity?'Your study data saves automatically to Google Sheets':!file?'Opening your study data…':'Changes save automatically. Offline edits stay on this device until you reconnect.';
     $('sync-connect').textContent=identity?'Reconnect to sync':'Sign in with Google';
   }
   const persistPrefix=id=>'magic-sync-v1:'+encodeURIComponent(identity.sub)+':'+id+':';
-  function reset(){authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-options').hidden=true;$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
+  function reset(){authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
   function cache(){const key=cacheKey;return {load(){const text=localStorage.getItem(key);return text?JSON.parse(text):null;},save(value){localStorage.setItem(key,JSON.stringify({...value,updatedAt:new Date().toISOString()}));},archive(value){localStorage.setItem(key+':recovery:'+crypto.randomUUID(),JSON.stringify({...value,updatedAt:new Date().toISOString()}));}};}
   function status(s){
     note((identity?.email||'')+' · '+s.message);
@@ -60,16 +55,34 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
     controls();
     await engine.cycle();
   }
-  function selectedFile(){const select=$('sync-files');return {id:select.value,name:select.selectedOptions[0]?.textContent};}
   async function list(){
-    const generation=epoch;const files=await remote.list();if(generation!==epoch)return;
-    $('sync-files').replaceChildren();
-    for(const f of files){const option=document.createElement('option');option.value=f.id;option.textContent=f.name;$('sync-files').append(option);}
-    $('sync-open').disabled=!files.length;$('sync-options').hidden=false;
-    controls();
-    note(file?'Connected · '+identity.email:'Google Sheets connected · choose your study workspace');
+    const generation=epoch,connection=remote;
     if(file&&engine){await engine.cycle();return;}
-    if(files.length===1){if(file?.id===files[0].id&&engine)await engine.cycle();else await open(files[0]);}
+    note('Opening your study data…');
+    let files=await connection.list();if(generation!==epoch)return;
+    let preferredId=null;
+    // Optional, ignored local migration preference. Never publish personal file IDs.
+    if(files.length>1&&!files.some(f=>f.appProperties?.magicPrimary==='v1')&&location.origin===GOOGLE_SIGN_IN_ORIGIN){
+      const response=await (fetcher||fetch)('./study-migration.local.json',{cache:'no-store',credentials:'omit'});
+      if(response.ok)preferredId=(await response.json()).fileId;
+      else if(response.status!==404)throw Error('Could not read the local study migration preference.');
+      if(generation!==epoch)return;
+    }
+    let selected=chooseStudyFile(files,preferredId);
+    if(!selected){
+      selected=await connection.create('Magic Spreadsheet study data');
+      if(generation!==epoch)return;
+      files=await connection.list();if(generation!==epoch)return;
+      if(files.length!==1||files[0].id!==selected.id)throw Error('Study file setup needs review. No study data was overwritten.');
+      selected=files[0];
+    }
+    if(selected.appProperties?.magicPrimary!=='v1'){
+      await connection.markPrimary(selected);if(generation!==epoch)return;
+      const confirmed=chooseStudyFile(await connection.list());if(generation!==epoch)return;
+      if(confirmed?.id!==selected.id||confirmed.appProperties?.magicPrimary!=='v1')throw Error('Could not confirm your study file.');
+      selected=confirmed;
+    }
+    await open(selected);
   }
   async function safe(fn, attempt=null){
     try{await fn();}catch(e){
@@ -107,7 +120,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
             identity={sub:who.sub,email:who.email};token=candidate;expires=Date.now()+(Number(r.expires_in)-30)*1000;
             // Existing workspace engines read the current token after reconnection.
             if(!remote)remote=createSyncRemote({owner:who.sub,validate,fetcher,access:()=>identity?.sub===who.sub&&generation===epoch&&Date.now()<expires?token:null});
-            $('sync-connect').hidden=true;$('sync-disconnect').hidden=true;running=false;controls();
+            $('sync-connect').hidden=true;running=false;controls();
             await list();
           },attempt);
         },error_callback:()=>{
@@ -119,15 +132,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
     }catch(e){running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Could not open Google. Try again. Your study data is unchanged.');}
   };
   $('sync-cancel').onclick=()=>{authAttempt++;running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Connection cancelled. Your study data is unchanged.');};
-  $('sync-open').onclick=()=>safe(()=>open(selectedFile()));
-  $('sync-refresh').onclick=()=>safe(list);
-  $('sync-new').onclick=()=>safe(async()=>{
-    if(running)return;running=true;
-    const generation=epoch;note('Creating a separate empty synced workspace…');
-    const created=await remote.create('Magic Spreadsheet study workspace '+new Date().toISOString());
-    running=false;if(generation===epoch){const option=document.createElement('option');option.value=created.id;option.textContent=created.name;$('sync-files').append(option);$('sync-files').value=created.id;$('sync-open').disabled=false;await open(created,empty());}
-  });
-  $('google-signout').onclick=$('sync-disconnect').onclick=()=>{reset();$('sync-connect').hidden=false;note('Guest mode · Google study data is kept separately');};
+  $('google-signout').onclick=()=>{reset();$('sync-connect').hidden=false;note('Guest mode · Google study data is kept separately');};
   $('sync-retry').onclick=()=>engine?.cycle({retry:true});
   $('sync-use-local').onclick=()=>safe(async()=>{if(confirm('Continue with this device’s copy? Earlier Google versions remain in Sheets; any unsynced local copy is kept for recovery.')){engine.resolve('local');await engine.cycle();}});
   $('sync-use-cloud').onclick=()=>safe(async()=>{if(confirm('Continue with the selected Google copy? Earlier Google versions remain in Sheets; any unsynced local copy is kept for recovery.')){engine.resolve($('sync-copies').value);await engine.cycle();}});
