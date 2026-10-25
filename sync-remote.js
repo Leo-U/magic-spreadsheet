@@ -37,9 +37,13 @@ export function createSyncRemote({access,owner,validate,fetcher=fetch}) {
   async function create(name) {
     const file=await request(DRIVE+'?fields=id,name,appProperties',{method:'POST',body:JSON.stringify({name,mimeType:'application/vnd.google-apps.spreadsheet',appProperties:{magicSync:'v1',owner}})});
     if(!/^[\w-]+$/.test(file.id||''))throw Error('Creation could not be confirmed.');
+    const metadata=await request(SHEETS+file.id+'?fields=sheets.properties');
+    const initial=metadata.sheets||[];
+    if(initial.length!==1||!Number.isInteger(initial[0].properties?.sheetId))throw Error('Unexpected new spreadsheet layout.');
+    const journalId=initial[0].properties.sheetId;
     await request(SHEETS+file.id+':batchUpdate',{method:'POST',body:JSON.stringify({requests:[
-      {addSheet:{properties:{sheetId:4123,title:'Journal',gridProperties:{rowCount:1000,columnCount:54}}}},
-      {updateCells:{start:{sheetId:4123,rowIndex:0,columnIndex:0},rows:[{values:[{userEnteredValue:{stringValue:'magic-sync-v1'}},{userEnteredValue:{stringValue:owner}}]}],fields:'userEnteredValue'}}
+      {updateSheetProperties:{properties:{sheetId:journalId,title:'Journal',gridProperties:{columnCount:54}},fields:'title,gridProperties.columnCount'}},
+      {updateCells:{start:{sheetId:journalId,rowIndex:0,columnIndex:0},rows:[{values:[{userEnteredValue:{stringValue:'magic-sync-v1'}},{userEnteredValue:{stringValue:owner}}]}],fields:'userEnteredValue'}}
     ]})});
     return file;
   }

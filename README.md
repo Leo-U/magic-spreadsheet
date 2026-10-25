@@ -44,3 +44,8 @@ Personal setup notes, study backups, screenshots and logs are intentionally excl
 ## Migration from multiple test workspaces
 
 An existing file is marked with the private app property `magicPrimary=v1` after its account and journal are validated. With multiple unmarked legacy files, the app stops instead of guessing. In local testing only, an ignored `study-migration.local.json` file containing `{ "fileId": "selected-file-id" }` can identify the explicitly chosen file. This ID must match the signed-in account’s discovered files. The app marks and rechecks the selection; subsequent browsers discover the marker automatically. Other files remain untouched. Multiple primary files stop loading for review rather than risking a silent switch. Never commit a real migration file.
+
+### Refreshing a Google session (local development)
+The current tab retains its verified, short-lived Google access token in sessionStorage so refreshing can reopen the chart without another popup. Restoration checks expiration and verifies the Google account before reading its study file. It never creates a replacement file during restoration. Sign-out and cancelled restoration remove the saved connection; expired or rejected credentials require a user-initiated sign-in. Tokens are not stored in localStorage or committed to Git. This is tab-session continuity, not a permanent login or a background refresh-token flow. Pending study edits still use the existing local recovery flow.
+
+Validation: `gjs session-refresh-browser-test.js` uses isolated synthetic Google responses to test actual reloads, restoration without a popup or data writes, sign-out, expiry, account mismatch, and malformed session data.

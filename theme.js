@@ -7,9 +7,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.querySelector('#theme-toggle');
     const update = () => {
-      const dark = document.documentElement.dataset.theme === 'dark';
-      toggle.setAttribute('aria-checked', String(dark));
-      toggle.querySelector('span').textContent = dark ? 'On' : 'Off';
+      toggle.textContent = document.documentElement.dataset.theme === 'dark' ? 'Light Mode' : 'Dark Mode';
     };
     update();
     toggle.addEventListener('click', () => {

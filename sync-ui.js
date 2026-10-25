@@ -1,24 +1,50 @@
 import {GOOGLE_SIGN_IN_CLIENT_ID,GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261023-signin-1';
-import {createSyncRemote,SYNC_SCOPE,chooseStudyFile} from './sync-remote.js?v=20261025-single-study-1';
+import {createSyncRemote,SYNC_SCOPE,chooseStudyFile} from './sync-remote.js?v=20261025-journal-only-1';
 import {createSyncEngine,clone} from './sync-core.js?v=20261023-sync-1';
-export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,fetcher,clientId=GOOGLE_SIGN_IN_CLIENT_ID}) {
+export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onSignOut=()=>{},canApply,provider,fetcher,clientId=GOOGLE_SIGN_IN_CLIENT_ID}) {
   const $=id=>document.getElementById(id);
   let identity=null,token=null,expires=0,epoch=0,remote=null,engine=null,file=null,cacheKey=null,debounce=null,running=false;
-  let authAttempt=0, sdk=null;
+  let authAttempt=0, sdk=null, awaitingChart=false;
   const pageId=crypto.randomUUID();
-  function note(text){$('sync-status').textContent=text;}
+  const sessionKey='magic-google-session-v1';
+  const forgetSession=()=>{try{sessionStorage.removeItem(sessionKey);}catch{}};
+  function rememberSession(){try{sessionStorage.setItem(sessionKey,JSON.stringify({identity,token,expires,clientId}));}catch{}}
+  async function restoreSession(){
+    let saved;
+    try{saved=JSON.parse(sessionStorage.getItem(sessionKey)||'null');}catch{forgetSession();return;}
+    if(!saved)return;
+    if(saved.clientId!==clientId||typeof saved.token!=='string'||!saved.token||!Number.isFinite(saved.expires)||saved.expires<=Date.now()||typeof saved.identity?.sub!=='string'||!saved.identity.sub){forgetSession();return;}
+    const generation=epoch,attempt=++authAttempt;
+    running=true;$('sync-connect').hidden=true;$('sync-cancel').hidden=false;
+    note('Restoring your Google connection…');
+    await safe(async()=>{
+      const response=await (fetcher||fetch)('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:'Bearer '+saved.token},credentials:'omit',signal:AbortSignal.timeout(20000)});
+      if(generation!==epoch||attempt!==authAttempt)return;
+      if(!response.ok){forgetSession();throw Error('Please sign in again to open your study data.');}
+      const who=await response.json();
+      if(generation!==epoch||attempt!==authAttempt)return;
+      if(who.sub!==saved.identity.sub||who.email_verified!==true||typeof who.email!=='string'||!who.email){forgetSession();throw Error('Please sign in again to verify your account.');}
+      identity={sub:who.sub,email:who.email};token=saved.token;expires=saved.expires;awaitingChart=true;
+      remote=createSyncRemote({owner:who.sub,validate,fetcher,access:()=>identity?.sub===who.sub&&generation===epoch&&Date.now()<expires?token:null});
+      running=false;controls();await list(false);
+    },attempt);
+  }
+  function note(text,attention=false){$('sync-status').textContent=text;$('account-save-status').textContent=text;$('account-save-status').hidden=!identity&&!attention;$('sync-attention').hidden=!attention;$('save-indicator').classList.toggle('needs-attention',attention);}
   function controls(){
     $('account-exit').hidden=!identity;
+    $('open-chart').textContent=identity?'Open chart':'Continue as guest';
     $('google-signin-status').textContent=identity?'Signed in as '+identity.email:'';
     $('google-signout').hidden=!identity;
     $('sync-guidance').textContent=!identity?'Your study data saves automatically to Google Sheets':!file?'Opening your study data…':'Changes save automatically. Offline edits stay on this device until you reconnect.';
     $('sync-connect').textContent=identity?'Reconnect to sync':'Sign in with Google';
   }
   const persistPrefix=id=>'magic-sync-v1:'+encodeURIComponent(identity.sub)+':'+id+':';
-  function reset(){authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
+  function reset(){forgetSession();awaitingChart=false;authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
   function cache(){const key=cacheKey;return {load(){const text=localStorage.getItem(key);return text?JSON.parse(text):null;},save(value){localStorage.setItem(key,JSON.stringify({...value,updatedAt:new Date().toISOString()}));},archive(value){localStorage.setItem(key+':recovery:'+crypto.randomUUID(),JSON.stringify({...value,updatedAt:new Date().toISOString()}));}};}
   function status(s){
-    note((identity?.email||'')+' · '+s.message);
+    if(s.phase==='reconnect')forgetSession();
+    if(s.phase==='saved'&&awaitingChart){awaitingChart=false;onReady();}
+    note(s.message,['uncertain','offline','waiting','reconnect','conflict'].includes(s.phase));
     $('sync-retry').hidden=!['uncertain','offline','waiting'].includes(s.phase);
     $('sync-connect').hidden=s.phase!=='reconnect';
     $('sync-connect').textContent='Reconnect to sync';
@@ -38,7 +64,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
       for(const candidate of candidates){const opt=document.createElement('option');opt.value=candidate.key;opt.textContent=(candidate.value.updatedAt||'Earlier local copy')+' · '+candidate.value.data.sets.length+' sets';$('sync-recoveries').append(opt);}
       $('sync-recover').onclick=()=>safe(()=>open(selected,null,$('sync-recoveries').value));
       $('sync-keep-cloud').onclick=()=>safe(()=>open(selected,null,null,true));
-      note('Unsynced local edits exist for this account. Choose the local copy to recover; other copies remain stored.');return;
+      note('Unsynced local edits exist for this account. Choose the local copy to recover; other copies remain stored.',true);return;
     }
     $('sync-recovery').hidden=true;
     engine?.stop();file=selected;cacheKey=persistPrefix(file.id)+pageId+':'+crypto.randomUUID();
@@ -55,7 +81,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
     controls();
     await engine.cycle();
   }
-  async function list(){
+  async function list(allowCreate=true){
     const generation=epoch,connection=remote;
     if(file&&engine){await engine.cycle();return;}
     note('Opening your study data…');
@@ -70,6 +96,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
     }
     let selected=chooseStudyFile(files,preferredId);
     if(!selected){
+      if(!allowCreate)throw Error('Your study file could not be found. Sign in again to continue.');
       selected=await connection.create('Magic Spreadsheet study data');
       if(generation!==epoch)return;
       files=await connection.list();if(generation!==epoch)return;
@@ -89,11 +116,12 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
       if(attempt!==null&&attempt!==authAttempt)return;
       $('sync-connect').hidden=false;
       $('sync-connect').textContent=identity?'Reconnect to sync':'Sign in with Google';
-      note(e.auth?'Reconnect to resume syncing. Local changes remain stored.':e.message+' No automatic retry was made.');
+      note(e.auth?'Reconnect to resume syncing. Local changes remain stored.':e.message+' No automatic retry was made.',true);
     }finally{
       if(attempt===null||attempt===authAttempt){running=false;$('sync-cancel').hidden=true;if(!remote)$('sync-connect').hidden=false;}
     }
   }
+  $('open-chart').addEventListener('click',()=>{if(!identity){authAttempt++;running=false;forgetSession();$('sync-cancel').hidden=true;$('sync-connect').hidden=false;}});
   $('sync-connect').onclick=()=>{
     if(running||!sdk)return;
     const approved=identity?.sub,generation=epoch,attempt=++authAttempt;
@@ -117,9 +145,10 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
             if(typeof who.sub!=='string'||!who.sub||typeof who.email!=='string'||!who.email||who.email_verified!==true)throw Error('Could not verify the Google account.');
             if(approved&&who.sub!==approved)throw Error('Choose the same account to reconnect. Sign out first to switch accounts. Nothing was uploaded.');
             if(!Number.isFinite(Number(r.expires_in))||Number(r.expires_in)<=30)throw Error('Google access expired. Try again.');
-            identity={sub:who.sub,email:who.email};token=candidate;expires=Date.now()+(Number(r.expires_in)-30)*1000;
+            identity={sub:who.sub,email:who.email};awaitingChart=true;token=candidate;expires=Date.now()+(Number(r.expires_in)-30)*1000;
             // Existing workspace engines read the current token after reconnection.
             if(!remote)remote=createSyncRemote({owner:who.sub,validate,fetcher,access:()=>identity?.sub===who.sub&&generation===epoch&&Date.now()<expires?token:null});
+            rememberSession();
             $('sync-connect').hidden=true;running=false;controls();
             await list();
           },attempt);
@@ -131,8 +160,8 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
       client.requestAccessToken({prompt:'select_account',...(identity?{login_hint:identity.email}:{})});
     }catch(e){running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Could not open Google. Try again. Your study data is unchanged.');}
   };
-  $('sync-cancel').onclick=()=>{authAttempt++;running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Connection cancelled. Your study data is unchanged.');};
-  $('google-signout').onclick=()=>{reset();$('sync-connect').hidden=false;note('Guest mode · Google study data is kept separately');};
+  $('sync-cancel').onclick=()=>{forgetSession();authAttempt++;running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Connection cancelled. Your study data is unchanged.');};
+  $('google-signout').onclick=()=>{reset();$('sync-connect').hidden=false;note('Guest mode · saved in this browser');onSignOut();};
   $('sync-retry').onclick=()=>engine?.cycle({retry:true});
   $('sync-use-local').onclick=()=>safe(async()=>{if(confirm('Continue with this device’s copy? Earlier Google versions remain in Sheets; any unsynced local copy is kept for recovery.')){engine.resolve('local');await engine.cycle();}});
   $('sync-use-cloud').onclick=()=>safe(async()=>{if(confirm('Continue with the selected Google copy? Earlier Google versions remain in Sheets; any unsynced local copy is kept for recovery.')){engine.resolve($('sync-copies').value);await engine.cycle();}});
@@ -152,6 +181,7 @@ export function mountSync({guest,validate,empty,onData,onMode,canApply,provider,
         script.onerror=()=>{clearTimeout(timeout);reject(Error('Google unavailable'));};document.head.append(script);
       });
       $('sync-connect').disabled=false;
+      await restoreSession();
     }catch(e){$('sync-guidance').textContent='Google could not load. Reload this page to try again, or continue as a guest.';}
   })();
   return {ready,destroy(){reset();clearInterval(timer);window.removeEventListener('focus',poll);window.removeEventListener('online',poll);},get engine(){return engine;}};

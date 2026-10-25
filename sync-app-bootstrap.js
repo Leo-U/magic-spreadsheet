@@ -7,7 +7,8 @@ window.fetch=async(url,options={})=>{
  if(url.includes('/oauth2/v3/certs'))result={keys:[t.jwk]};
  else if(url.includes('userinfo'))result=t.user||{sub:'synthetic-owner',email:'test@example.test',email_verified:true};
  else if(url.includes('drive/v3/files?')&&options.method==='POST'){t.creates=(t.creates||0)+1;const body=JSON.parse(options.body);const file={id:'new_study',...body};t.files.push(file);result=file;}
- else if(url.includes(':batchUpdate'))result={};
+ else if(url.includes(':batchUpdate')){t.setupRequests=JSON.parse(options.body).requests;result={};}
+ else if(url.includes('?fields=sheets.properties'))result={sheets:[{properties:{sheetId:73,title:'Sheet1'}}]};
  else if(url.includes('drive/v3/files?'))result={files:JSON.parse(JSON.stringify(t.files))};
  else if(options.method==='PATCH'){const id=url.split('/files/')[1].split('?')[0];const file=t.files.find(f=>f.id===id);file.appProperties=JSON.parse(options.body).appProperties;result=file;t.marked=id;}
  else if(url.includes('study-migration.local.json'))result={fileId:'test_sheet'};
