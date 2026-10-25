@@ -11,18 +11,12 @@
 
 .history-cell{cursor:pointer}.history-cell.selected-cell{box-shadow:inset 0 0 0 2px #173e37}.history-cell.selected-cell .history-select{box-shadow:none}
 
-.detail-view{max-width:940px;margin:24px auto;padding:0 24px}.back-link{display:inline-flex;align-items:center;min-height:44px;margin-bottom:18px;color:#20634f;font-weight:600}.set-create{margin:20px 0;max-width:540px}.set-create form{display:flex;align-items:end;flex-wrap:wrap;gap:8px}.set-create label{width:100%;margin:0}.set-create input{flex:1;min-width:180px}.set-create button{margin:0}.data-tools{margin-top:24px;max-width:540px}.data-tools summary{font-weight:600}.data-tools button{margin:8px 0}a.topic-link{text-decoration:underline;display:flex;align-items:center}a:focus-visible{outline:3px solid #d59128;outline-offset:2px}@media(max-width:720px){.detail-view{padding:0 16px}.set-create button{width:100%}}
+.detail-view{max-width:940px;margin:24px auto;padding:0 24px}.back-link{display:inline-flex;align-items:center;min-height:44px;margin-bottom:18px;color:#20634f;font-weight:600}.set-create{margin:20px 0;max-width:780px}.set-create form{display:flex;align-items:end;flex-wrap:wrap;gap:8px}.set-create label{width:100%;margin:0}.set-create input{flex:1;min-width:180px}.set-create button{margin:0}.data-tools{margin-top:24px;max-width:540px}.data-tools summary{font-weight:600}.data-tools button{margin:8px 0}a.topic-link{text-decoration:underline;display:flex;align-items:center}a:focus-visible{outline:3px solid #d59128;outline-offset:2px}@media(max-width:720px){.detail-view{padding:0 16px}.set-create button{width:100%}}
 
 .row-actions{display:flex;align-items:center;justify-content:space-between}.row-delete-set{background:transparent;color:#854036;border:0;border-radius:4px;font-size:11px;font-weight:500;padding:3px 5px;min-height:44px;white-space:nowrap}.row-delete-set:hover{background:#f5e2dd}
 
 /* Compact spreadsheet grid: exactly one border per shared edge. */
 .overview-scroll{border:0}#history-grid{border-top:1px solid #37413d;border-left:1px solid #37413d}#history-grid th,#history-grid td,#history-grid tr:last-child>*{border-right:1px solid #37413d;border-bottom:1px solid #37413d}#history-grid th{width:168px;min-width:168px;max-width:168px}.set-controls{display:grid;grid-template-columns:28px minmax(0,1fr)32px;align-items:center;gap:0;min-height:36px}.select-set{display:flex;align-items:center;justify-content:center;margin:0;width:28px;height:36px}.select-set .subject-select{width:18px;height:18px;margin:0!important}#history-grid th a.topic-link{display:block;width:auto;min-height:36px;height:36px;padding:0 2px;line-height:36px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.row-delete-set{display:flex;align-items:center;justify-content:center;width:32px;min-width:32px;height:36px;min-height:36px;padding:0;border-radius:0}#history-grid .history-cell{height:36px;width:1px;min-width:0;padding:0}.history-select{min-width:0;min-height:36px;height:36px;padding:4px;font-size:11px;line-height:14px}.history-cell.selected-cell{box-shadow:inset 0 0 0 1px #173e37}.history-select:focus-visible{outline:1px solid #173e37;outline-offset:-1px}
-
-/* Single charcoal hairlines; 1px rules above remain the fallback. */
-@supports (border-width: .5px){
-  #history-grid{border-top-width:.5px;border-left-width:.5px}
-  #history-grid th,#history-grid td,#history-grid tr:last-child>*{border-right-width:.5px;border-bottom-width:.5px}
-}
 
 /* Size history columns to their longest label, not an arbitrary minimum. */
 #history-grid .no-history{min-width:0;white-space:normal;padding:4px}
@@ -190,3 +184,58 @@
 [data-theme] .detail-view .marks input:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4L19 6' fill='none' stroke='%23202020' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 
 .google-connection{margin:24px 0;border-top:1px solid #777;padding-top:16px}.google-connection h2{font-size:20px}.google-connection p{margin:10px 0}.google-actions{display:flex;gap:8px;flex-wrap:wrap}.google-connection button{font-size:14px}.google-connection details{font-size:13px}.google-connection #google-copy-review{border:1px solid #777;padding:12px;margin:12px 0}.google-connection a{overflow-wrap:anywhere}
+
+.google-signin{margin:24px 0;padding-top:16px;border-top:1px solid #777}.google-signin h2{font-size:20px}.google-signin p{margin:10px 0}.google-signin details{font-size:13px}#google-signin-button{max-width:100%;width:280px}
+
+.google-account,.sync-status{max-width:1080px;margin:12px auto;padding:0 20px}.google-account .google-signin{border:0;padding:0;margin:12px 0}.google-account button,.google-account select{margin:5px 4px 5px 0}.sync-status{font-size:13px;color:var(--muted);min-height:20px}.google-account p{overflow-wrap:anywhere}
+
+/* Account controls: one next step, workspace tools on demand. */
+.google-account .google-signin{max-width:660px;padding:12px 0}
+.google-account h2{font-size:17px;margin:0 0 10px}
+.google-account #sync-manage{margin:16px 0;padding:12px;border:1px solid var(--muted);border-radius:6px}
+.google-account #sync-options label{display:block;margin-top:12px}
+.google-account #sync-files{display:block;width:100%;max-width:100%;min-width:0}
+.google-account .google-actions{align-items:center;gap:8px}
+.google-account .google-actions button{margin:4px 0}
+.google-account .sync-extra{margin:14px 0}
+.google-account .account-exit{margin-top:18px;border-top:1px solid var(--muted);padding-top:10px}
+.google-account #sync-active{font-weight:600;overflow-wrap:anywhere}
+.google-account #sync-guidance{line-height:1.5}
+
+/* Account controls live on a dedicated route. */
+.google-account{max-width:700px;margin:28px auto;padding:0 20px}
+.google-account h1{font-size:28px;margin:0 0 24px}
+.app-bar nav{flex-wrap:wrap;gap:8px 16px}
+.app-bar a[aria-current="page"]{font-weight:700;text-decoration-thickness:2px}
+.sync-status a{margin-left:8px;color:inherit}
+.sync-status.needs-attention{color:var(--text);border-left:3px solid #d99b36}
+@media(max-width:480px){.app-bar{align-items:flex-start;gap:8px}.app-bar nav{gap:4px 12px}.google-account{margin:20px auto;padding:0 16px}}
+
+.google-account .signin-description{font-size:14px;line-height:1.5}
+
+/* Use the same near-black grid in both themes, including empty-history cells. */
+[data-theme] #history-grid{border-top:1px solid #111;border-left:1px solid #111}
+[data-theme] #history-grid th,[data-theme] #history-grid td,[data-theme] #history-grid .no-history,[data-theme] #history-grid tr:last-child>*{border-right:1px solid #111;border-bottom:1px solid #111}
+
+/* Make study-set navigation recognizable as links in either theme. */
+[data-theme="light"] #history-grid th a.topic-link{color:#0759b6}
+[data-theme="dark"] #history-grid th a.topic-link{color:#8fc5ff}
+#history-grid th a.topic-link{text-decoration-line:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-skip-ink:none}
+
+/* Empty history slots complete the grid; unused scroll space is not a cell. */
+[data-theme] .overview-scroll{background:transparent}
+[data-theme="light"] #history-grid :is(.empty-history,.no-history){background:#fff}
+[data-theme="dark"] #history-grid :is(.empty-history,.no-history){background:#292929}
+
+/* A visual switch conveys the state without changing the label. */
+[data-theme] #theme-toggle{display:inline-flex;align-items:center;gap:10px}
+[data-theme="light"] #theme-toggle{background:#dcecff;color:#17334d;border-color:#3778b8}
+[data-theme="dark"] #theme-toggle{background:#303030;color:#eee;border-color:#686868}
+#theme-toggle .theme-switch{position:relative;width:28px;min-width:28px;height:16px;margin:0;border-radius:10px;background:#777}
+#theme-toggle .theme-switch::after{content:"";position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:#fff}
+#theme-toggle[aria-checked="true"] .theme-switch{background:#8fc5ff}
+#theme-toggle[aria-checked="true"] .theme-switch::after{left:15px;background:#18334d}
+
+/* Preview the destination theme on the mode-switch button. */
+[data-theme="dark"] #theme-toggle{background:#e6e6e6;color:#252525;border-color:#bcbcbc}
+[data-theme="light"] #theme-toggle{background:#303030;color:#f2f2f2;border-color:#555}

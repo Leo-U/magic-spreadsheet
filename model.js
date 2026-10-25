@@ -1,6 +1,6 @@
-import {activeSets} from './sets.js';
-import {localDay} from './calendar.js';
-import {prepareHistory} from './history-data.js';
+import {activeSets} from './sets.js?v=20261025-live-1';
+import {localDay} from './calendar.js?v=20261025-live-1';
+import {prepareHistory} from './history-data.js?v=20261025-live-1';
 export const newId = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 export const empty = () => ({version:1, sets:[], items:[], reviews:[], snapshots:[]});
 export function addSet(state,name) { const set={id:newId(),name:name.trim()}; if(!set.name) throw Error('Enter a set name.'); state.sets.push(set); return set; }
