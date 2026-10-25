@@ -37,7 +37,7 @@ gjs sync-app-browser-test.js 1280
 gjs sync-browser-test.js
 ```
 
-The combined account flow and automatic collection selection are covered by the main-app checks at both widths, including cancellation, consent denial, account mismatch, token renewal, saves, Undo, remote updates and guest isolation. The prior two-step flow also passed a real in-app/Chrome round trip. A real Google consent round trip for the newer combined flow remains outstanding. Older test scripts are retained as development history and may assert superseded UI.
+The combined account flow and automatic collection selection passed 31 main-app checks at both widths, including cancellation, consent denial, account mismatch, token renewal, saves, Undo, remote updates and guest isolation. The prior two-step flow also passed a real in-app/Chrome round trip. The combined flow has also completed real Google authorization and automatically opened the existing study collection, with its original chart entries intact. Older test scripts are retained as development history and may assert superseded UI.
 
 Personal setup notes, study backups, screenshots and logs are intentionally excluded. The development branch has no release integrity manifest: that belongs to a reviewed release build.
 
