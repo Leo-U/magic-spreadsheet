@@ -1,4 +1,4 @@
-import {GOOGLE_SIGN_IN_CLIENT_ID, GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261025-live-1';
+import {GOOGLE_SIGN_IN_CLIENT_ID, GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261026-local-study-1';
 
 const bytes = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const decode = value => JSON.parse(new TextDecoder().decode(bytes(value)));

@@ -1,4 +1,4 @@
-import {localDay} from './calendar.js?v=20261025-live-1';
+import {localDay} from './calendar.js?v=20261026-local-study-1';
 // Deterministic repair: no records removed, original IDs retained for audit.
 // Called on a copy during load/import; browser storage is not written on startup.
 export function prepareHistory(state) {

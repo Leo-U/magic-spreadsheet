@@ -1,19 +1,54 @@
-import {GOOGLE_SIGN_IN_CLIENT_ID,GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261025-live-1';
-import {createSyncRemote,SYNC_SCOPE,chooseStudyFile} from './sync-remote.js?v=20261025-live-1';
-import {createSyncEngine,clone} from './sync-core.js?v=20261025-live-1';
+import {GOOGLE_SIGN_IN_CLIENT_ID,GOOGLE_SIGN_IN_ORIGIN} from './google-config.js?v=20261026-local-study-1';
+import {createSyncRemote,SYNC_SCOPE,chooseStudyFile} from './sync-remote.js?v=20261026-local-study-1';
+import {createSyncEngine,clone} from './sync-core.js?v=20261026-local-study-1';
 export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onSignOut=()=>{},canApply,provider,fetcher,clientId=GOOGLE_SIGN_IN_CLIENT_ID}) {
   const $=id=>document.getElementById(id);
   let identity=null,token=null,expires=0,epoch=0,remote=null,engine=null,file=null,cacheKey=null,debounce=null,running=false;
-  let authAttempt=0, sdk=null, awaitingChart=false;
+  let authAttempt=0, sdk=null, awaitingChart=false, verified=false;
   const pageId=crypto.randomUUID();
   const sessionKey='magic-google-session-v1';
+  const deviceKey='magic-study-device-v1',tabKey='magic-study-tab-v1';
+  const connected=()=>verified&&!!token&&Date.now()<expires;
+  function rememberStudy(){
+    if(!identity||!file||!cacheKey)return;
+    const record=JSON.stringify({clientId,identity:{sub:identity.sub,email:identity.email},file:{id:file.id,name:file.name||'Study data'},cacheKey});
+    // No Google token belongs in the remembered device collection.
+    try{localStorage.setItem(deviceKey,record);sessionStorage.setItem(tabKey,record);}catch{}
+  }
+  function forgetStudy(){
+    try{sessionStorage.removeItem(tabKey);const saved=JSON.parse(localStorage.getItem(deviceKey)||'null');if(saved?.identity?.sub===identity?.sub)localStorage.removeItem(deviceKey);}catch{}
+  }
+  function cachedStudy(){
+    const read=key=>{try{return JSON.parse(key)||null;}catch{return null;}};
+    let tab,device;try{tab=read(sessionStorage.getItem(tabKey));device=read(localStorage.getItem(deviceKey));}catch{return null;}
+    // Another tab may have replaced a clean cache. Fall back only within the same account and file.
+    const candidates=tab?[tab,...(device?.identity?.sub===tab.identity?.sub&&device?.file?.id===tab.file?.id?[device]:[])]:[device];
+    for(const saved of candidates){try{
+      if(saved?.clientId!==clientId||typeof saved.identity?.sub!=='string'||!saved.identity.sub||typeof saved.identity.email!=='string'||!saved.identity.email||typeof saved.file?.id!=='string'||!/^[\w-]+$/.test(saved.file.id)||typeof saved.cacheKey!=='string')continue;
+      const prefix='magic-sync-v1:'+encodeURIComponent(saved.identity.sub)+':'+saved.file.id+':';
+      if(!saved.cacheKey.startsWith(prefix))continue;
+      const value=JSON.parse(localStorage.getItem(saved.cacheKey)||'null');
+      if(!value||!Array.isArray(value.base)||value.base.some(id=>typeof id!=='string')||typeof value.dirty!=='boolean')continue;
+      validate(value.data);
+      if(value.outbox){if(typeof value.outbox.id!=='string'||!value.outbox.id||!Array.isArray(value.outbox.parents)||value.outbox.parents.some(id=>typeof id!=='string'))continue;validate(value.outbox.data);}
+      return {...saved,value};
+    }catch{}}
+    return null;
+  }
+  function makeRemote(){const owner=identity.sub,generation=epoch;return createSyncRemote({owner,validate,fetcher,access:()=>identity?.sub===owner&&generation===epoch&&connected()?token:null});}
+  async function restoreLocalStudy(){
+    const saved=cachedStudy();if(!saved)return;
+    identity=saved.identity;remote=makeRemote();
+    await open(saved.file,null,saved.cacheKey,true,true);
+    controls();note('Saved on this device · Google sync paused. You can keep studying.',true);onReady();
+  }
   const forgetSession=()=>{try{sessionStorage.removeItem(sessionKey);}catch{}};
   function rememberSession(){try{sessionStorage.setItem(sessionKey,JSON.stringify({identity,token,expires,clientId}));}catch{}}
   async function restoreSession(){
     let saved;
     try{saved=JSON.parse(sessionStorage.getItem(sessionKey)||'null');}catch{forgetSession();return;}
     if(!saved)return;
-    if(saved.clientId!==clientId||typeof saved.token!=='string'||!saved.token||!Number.isFinite(saved.expires)||saved.expires<=Date.now()||typeof saved.identity?.sub!=='string'||!saved.identity.sub){forgetSession();return;}
+    if((identity&&identity.sub!==saved.identity?.sub)||saved.clientId!==clientId||typeof saved.token!=='string'||!saved.token||!Number.isFinite(saved.expires)||saved.expires<=Date.now()||typeof saved.identity?.sub!=='string'||!saved.identity.sub){forgetSession();return;}
     const generation=epoch,attempt=++authAttempt;
     running=true;$('sync-connect').hidden=true;$('sync-cancel').hidden=false;
     note('Restoring your Google connection…');
@@ -24,8 +59,8 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
       const who=await response.json();
       if(generation!==epoch||attempt!==authAttempt)return;
       if(who.sub!==saved.identity.sub||who.email_verified!==true||typeof who.email!=='string'||!who.email){forgetSession();throw Error('Please sign in again to verify your account.');}
-      identity={sub:who.sub,email:who.email};token=saved.token;expires=saved.expires;awaitingChart=true;
-      remote=createSyncRemote({owner:who.sub,validate,fetcher,access:()=>identity?.sub===who.sub&&generation===epoch&&Date.now()<expires?token:null});
+      identity={sub:who.sub,email:who.email};token=saved.token;expires=saved.expires;verified=true;awaitingChart=!engine;
+      if(!remote)remote=makeRemote();
       running=false;controls();await list(false);
     },attempt);
   }
@@ -33,20 +68,24 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
   function controls(){
     $('account-exit').hidden=!identity;
     $('open-chart').textContent=identity?'Open chart':'Continue as guest';
-    $('google-signin-status').textContent=identity?'Signed in as '+identity.email:'';
+    $('google-signin-status').textContent=identity?(connected()?'Signed in as ':'Study data on this device for ')+identity.email:'';
     $('google-signout').hidden=!identity;
     $('sync-guidance').textContent=!identity?'Your study data saves automatically to Google Sheets':!file?'Opening your study data…':'Changes save automatically. Offline edits stay on this device until you reconnect.';
     $('sync-connect').textContent=identity?'Reconnect to sync':'Sign in with Google';
+    $('sync-reconnect').hidden=!identity||connected();$('sync-reconnect').disabled=!sdk;
   }
   const persistPrefix=id=>'magic-sync-v1:'+encodeURIComponent(identity.sub)+':'+id+':';
-  function reset(){forgetSession();awaitingChart=false;authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
-  function cache(){const key=cacheKey;return {load(){const text=localStorage.getItem(key);return text?JSON.parse(text):null;},save(value){localStorage.setItem(key,JSON.stringify({...value,updatedAt:new Date().toISOString()}));},archive(value){localStorage.setItem(key+':recovery:'+crypto.randomUUID(),JSON.stringify({...value,updatedAt:new Date().toISOString()}));}};}
+  function reset(){forgetStudy();forgetSession();verified=false;awaitingChart=false;authAttempt++;epoch++;running=false;identity=null;token=null;remote=null;engine?.stop();engine=null;file=null;cacheKey=null;clearTimeout(debounce);onMode(null);onData(guest.load());$('sync-file-link').hidden=true;$('sync-conflict').hidden=true;$('sync-retry').hidden=true;$('sync-cancel').hidden=true;$('sync-recovery').hidden=true;controls();}
+  function cache(){const key=cacheKey;return {load(){const text=localStorage.getItem(key);return text?JSON.parse(text):null;},save(value){localStorage.setItem(key,JSON.stringify({...value,updatedAt:new Date().toISOString()}));rememberStudy();},archive(value){localStorage.setItem(key+':recovery:'+crypto.randomUUID(),JSON.stringify({...value,updatedAt:new Date().toISOString()}));}};}
   function status(s){
-    if(s.phase==='reconnect')forgetSession();
+    if(s.phase==='reconnect'){verified=false;token=null;expires=0;forgetSession();}
+    if(s.phase==='saved'&&cacheKey&&!localStorage.getItem(cacheKey))cache().save({data:engine.data(),base:[],dirty:false,outbox:null});
     if(s.phase==='saved'&&awaitingChart){awaitingChart=false;onReady();}
-    note(s.message,['uncertain','offline','waiting','reconnect','conflict'].includes(s.phase));
+    const paused=identity&&!connected();
+    note(paused&&['pending','checking','reconnect'].includes(s.phase)?'Saved on this device · Google sync paused. You can keep studying.':s.message,paused||['uncertain','offline','waiting','reconnect','conflict'].includes(s.phase));
+    controls();
     $('sync-retry').hidden=!['uncertain','offline','waiting'].includes(s.phase);
-    $('sync-connect').hidden=s.phase!=='reconnect';
+    $('sync-connect').hidden=!paused;
     $('sync-connect').textContent='Reconnect to sync';
     $('sync-conflict').hidden=s.phase!=='conflict';
     if(s.phase==='conflict') {
@@ -55,10 +94,10 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
     }
   }
   function localCandidates(fileId){const prefix=persistPrefix(fileId),found=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key.startsWith(prefix))continue;const value=JSON.parse(localStorage.getItem(key));validate(value.data);if(value.dirty||value.outbox)found.push({key,value});}return found;}
-  async function open(selected, initial=null, recovered=null, skipRecovery=false) {
+  async function open(selected, initial=null, recovered=null, skipRecovery=false, localOnly=false) {
     if(running)throw Error('Wait for the current connection.');
     const generation=epoch;
-    const candidates=localCandidates(selected.id);
+    const candidates=!initial&&!recovered&&!skipRecovery?localCandidates(selected.id):[];
     if(!initial&&!recovered&&!skipRecovery&&candidates.length){
       $('sync-recovery').hidden=false;$('sync-recoveries').replaceChildren();
       for(const candidate of candidates){const opt=document.createElement('option');opt.value=candidate.key;opt.textContent=(candidate.value.updatedAt||'Earlier local copy')+' · '+candidate.value.data.sets.length+' sets';$('sync-recoveries').append(opt);}
@@ -79,7 +118,7 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
     onData(engine.data());
     $('sync-file-link').href='https://docs.google.com/spreadsheets/d/'+file.id+'/edit';$('sync-file-link').hidden=false;
     controls();
-    await engine.cycle();
+    if(!localOnly)await engine.cycle();
   }
   async function list(allowCreate=true){
     const generation=epoch,connection=remote;
@@ -145,9 +184,9 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
             if(typeof who.sub!=='string'||!who.sub||typeof who.email!=='string'||!who.email||who.email_verified!==true)throw Error('Could not verify the Google account.');
             if(approved&&who.sub!==approved)throw Error('Choose the same account to reconnect. Sign out first to switch accounts. Nothing was uploaded.');
             if(!Number.isFinite(Number(r.expires_in))||Number(r.expires_in)<=30)throw Error('Google access expired. Try again.');
-            identity={sub:who.sub,email:who.email};awaitingChart=true;token=candidate;expires=Date.now()+(Number(r.expires_in)-30)*1000;
+            identity={sub:who.sub,email:who.email};verified=true;awaitingChart=true;token=candidate;expires=Date.now()+(Number(r.expires_in)-30)*1000;
             // Existing workspace engines read the current token after reconnection.
-            if(!remote)remote=createSyncRemote({owner:who.sub,validate,fetcher,access:()=>identity?.sub===who.sub&&generation===epoch&&Date.now()<expires?token:null});
+            if(!remote)remote=makeRemote();
             rememberSession();
             $('sync-connect').hidden=true;running=false;controls();
             await list();
@@ -160,6 +199,7 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
       client.requestAccessToken({prompt:'select_account',...(identity?{login_hint:identity.email}:{})});
     }catch(e){running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Could not open Google. Try again. Your study data is unchanged.');}
   };
+  $('sync-reconnect').onclick=()=>$('sync-connect').click();
   $('sync-cancel').onclick=()=>{forgetSession();authAttempt++;running=false;$('sync-cancel').hidden=true;$('sync-connect').hidden=false;note('Connection cancelled. Your study data is unchanged.');};
   $('google-signout').onclick=()=>{reset();$('sync-connect').hidden=false;note('Guest mode · saved in this browser');onSignOut();};
   $('sync-retry').onclick=()=>engine?.cycle({retry:true});
@@ -171,6 +211,8 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
   controls();$('sync-connect').hidden=false;$('sync-connect').disabled=true;
   note('Guest mode · saved in this browser');
   const ready=(async()=>{
+    // Restore the local collection before loading Google's SDK or checking its token.
+    await restoreLocalStudy();
     if(!clientId||(!provider&&location.origin!==GOOGLE_SIGN_IN_ORIGIN)){$('sync-guidance').textContent='Google sync is unavailable at this address. You can continue as a guest.';return;}
     try{
       sdk=provider||window.google?.accounts?.oauth2;
@@ -180,9 +222,9 @@ export function mountSync({guest,validate,empty,onData,onMode,onReady=()=>{},onS
         script.onload=()=>{clearTimeout(timeout);window.google?.accounts?.oauth2?resolve(window.google.accounts.oauth2):reject(Error('Google unavailable'));};
         script.onerror=()=>{clearTimeout(timeout);reject(Error('Google unavailable'));};document.head.append(script);
       });
-      $('sync-connect').disabled=false;
+      $('sync-connect').disabled=false;controls();
       await restoreSession();
-    }catch(e){$('sync-guidance').textContent='Google could not load. Reload this page to try again, or continue as a guest.';}
+    }catch(e){$('sync-guidance').textContent=engine?'Google is unavailable. You can keep studying; changes save on this device.':'Google could not load. Reload this page to try again, or continue as a guest.';}
   })();
   return {ready,destroy(){reset();clearInterval(timer);window.removeEventListener('focus',poll);window.removeEventListener('online',poll);},get engine(){return engine;}};
 }

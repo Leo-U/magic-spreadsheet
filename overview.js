@@ -1,6 +1,6 @@
-import {activeSets} from './sets.js?v=20261025-live-1';
-import {localDay} from './calendar.js?v=20261025-live-1';
-import {hiddenSnapshotIds} from './history-data.js?v=20261025-live-1';
+import {activeSets} from './sets.js?v=20261026-local-study-1';
+import {localDay} from './calendar.js?v=20261026-local-study-1';
+import {hiddenSnapshotIds} from './history-data.js?v=20261026-local-study-1';
 // Stable timestamp order retains stored order when two entries share a timestamp.
 export function historyRows(state) {
   const hidden=hiddenSnapshotIds(state);

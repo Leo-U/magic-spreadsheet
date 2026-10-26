@@ -1,5 +1,5 @@
-import {createGoogleConnection} from './google-connection.js?v=20261025-live-1';
-import {GOOGLE_CLIENT_ID} from './google-config.js?v=20261025-live-1';
+import {createGoogleConnection} from './google-connection.js?v=20261026-local-study-1';
+import {GOOGLE_CLIENT_ID} from './google-config.js?v=20261026-local-study-1';
 export function mountGoogleConnection({getStudyData, clientId = GOOGLE_CLIENT_ID, oauthProvider, fetcher, now}) {
   const $ = id => document.getElementById(id);
   let connection, plan = null, sdkReady = false;

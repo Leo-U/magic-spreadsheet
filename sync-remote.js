@@ -1,4 +1,4 @@
-import {revisionRows,encodeRevision} from './sync-core.js?v=20261025-live-1';
+import {revisionRows,encodeRevision} from './sync-core.js?v=20261026-local-study-1';
 export const SYNC_SCOPE='https://www.googleapis.com/auth/drive.file';
 const DRIVE='https://www.googleapis.com/drive/v3/files';
 const SHEETS='https://sheets.googleapis.com/v4/spreadsheets/';
