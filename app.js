@@ -5,7 +5,7 @@ import {createStorage} from './storage.js?v=20261023-entries-9';
 const guestStorage=createStorage({empty,validate,prepareStoredState});
 let accountStorage=null,guestChosen=false;
 let restoringSession=false;
-try{const saved=JSON.parse(sessionStorage.getItem('magic-google-session-v1')||'null');restoringSession=!!(saved?.token&&saved?.identity?.sub&&Number.isFinite(saved.expires)&&saved.expires>Date.now());}catch{}
+try{restoringSession=!!(localStorage.getItem('magic-study-device-v1')||sessionStorage.getItem('magic-study-tab-v1'));const saved=JSON.parse(sessionStorage.getItem('magic-google-session-v1')||'null');restoringSession=restoringSession||!!(saved?.token&&saved?.identity?.sub&&Number.isFinite(saved.expires)&&saved.expires>Date.now());}catch{}
 
 const storage={load:()=>guestStorage.load(),save:data=>(accountStorage||guestStorage).save(data)};
 import {historyRows,shortDate} from './overview.js?v=20261023-entries-9';
@@ -138,7 +138,7 @@ function removeSet(id){if(!id)return;if(commit(s=>deleteSet(s,id),'Question set 
 $('#undo-set').onclick=()=>{if(commit(s=>undoSetDeletion(s),'Question set restored with its questions, marks and history.'))$('#overview-title').focus({preventScroll:true});};
 
 // Guest and Google account storage stay separate. Signing in never uploads guest data.
-import {mountSync} from './sync-ui.js?v=20261025-refresh-session-1';
+import {mountSync} from './sync-ui.js?v=20261026-local-study-1';
 const sync=mountSync({guest:guestStorage,validate,empty,
   onReady(){
     const keepPage=restoringSession&&(location.hash.startsWith('#set/')||location.hash==='#chart'||location.hash==='#account');

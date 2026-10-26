@@ -25,7 +25,7 @@ export const GOOGLE_SIGN_IN_ORIGIN = 'https://leo-u.github.io';
     if not re.search(r"GOOGLE_CLIENT_ID\s*=\s*''", contents['google-config.js']):
         raise SystemExit('Legacy Google backup client must remain disabled.')
     # Version the complete dependency graph so returning users receive the same release.
-    version = '20261025-live-1'
+    version = '20261026-local-study-1'
     for name, source in contents.items():
         source = re.sub(r"((?:src|href)=[\"'])([^\"'# :]+\.(?:js|css))(?:\?[^\"']*)?([\"'])",
                         lambda m: m[1]+m[2]+'?v='+version+m[3], source)

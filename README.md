@@ -55,3 +55,11 @@ Validation: `gjs session-refresh-browser-test.js` uses isolated synthetic Google
 The release includes default selection for a lone question set, a public privacy page, and a production build with a versioned dependency graph. The live OAuth client uses the same Google project as local testing so existing app-created study files remain discoverable. No broader permissions are requested. The deployment branch contains the packaged runtime; development retains tests and build helpers.
 
 Pre-release checks: 58 synthetic main-app checks at each of 390/1280 widths, session refresh/expiry/sign-out checks, and separate sync engine recovery/conflict checks. The old two-step UI adapter assertions have been replaced by the current combined-flow checks, including narrow permission scopes and RAW spreadsheet writes.
+
+## Studying while Google is disconnected — 26 October 2026
+
+The app remembers the most recently opened account collection on this device, without putting Google tokens in localStorage. On reload it can reopen that cached collection before Google's SDK or account verification is available. Marks, questions and chart entries save to the account's local queue while disconnected; they remain separate from guest data. The study page shows “Saved on this device · Google sync paused” and a Reconnect Google button.
+
+Google access still requires a valid token and verification of the same account. A cached account label is not treated as authentication. Reconnection keeps the current queue and file; normal revision/conflict protections apply. Explicit sign-out clears the automatic reopening pointers but retains underlying recovery copies. A browser/device with no previously opened collection still needs sign-in to load it. Existing users should open the updated app and sign in once to establish the remembered collection. This does not install offline website assets or provide permanent background Google access.
+
+`gjs offline-study-browser-test.js 390` (also 1280) uses synthetic accounts and actual reloads to cover expired tokens, HTTP 401, an unavailable Google SDK, red/yellow/green marks, chart snapshots, durable pending edits, wrong-account rejection, verified reconnect, token isolation, malformed cache references and sign-out. Existing app-flow and session-refresh regression checks also pass.
